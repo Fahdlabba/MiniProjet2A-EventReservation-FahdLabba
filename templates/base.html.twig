@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventPoster</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ asset('css/style.css') }}">
+    {% block stylesheets %}{% endblock %}
+</head>
+<body>
+    <a class="skip-link" href="#main-content">Aller au contenu principal</a>
+
+    <div class="site-backdrop" aria-hidden="true">
+        <div class="backdrop-blob blob-a"></div>
+        <div class="backdrop-blob blob-b"></div>
+        <div class="backdrop-grid"></div>
+        <div class="backdrop-noise"></div>
+    </div>
+
+    <header class="site-header">
+        <nav class="site-nav">
+            <a href="{{ path('home') }}" class="brand-link">
+                <span class="brand-wordmark">EventPoster</span>
+            </a>
+
+            <div class="nav-links">
+                <a href="{{ path('home') }}" class="nav-link">Événements</a>
+                <a href="/login" id="nav-login" class="nav-link nav-pill">Connexion</a>
+                <a href="/admin" id="nav-admin" class="nav-link nav-pill hidden-link">Admin</a>
+            </div>
+        </nav>
+    </header>
+
+    <main id="main-content" class="page-shell">
+        <div class="flash-messages">
+            {% for label, messages in app.flashes %}
+                {% for message in messages %}
+                    <div class="flash flash-{{ label }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+        
+        {% block body %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <p>Une expérience de réservation rapide, claire et sécurisée.</p>
+    </footer>
+
+    <script src="{{ asset('js/auth.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('jwt_token');
+            const navLogin = document.getElementById('nav-login');
+            const navAdmin = document.getElementById('nav-admin');
+
+            if (token) {
+                navLogin.textContent = 'Déconnexion';
+                navLogin.classList.add('logout-link');
+                navLogin.onclick = (e) => {
+                    e.preventDefault();
+                    localStorage.removeItem('jwt_token');
+                    localStorage.removeItem('refresh_token');
+                    window.location.href = '/';
+                };
+                
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    if (payload.roles && payload.roles.includes('ROLE_ADMIN')) {
+                        navAdmin.classList.remove('hidden-link');
+                    }
+                } catch (e) {
+                    navAdmin.classList.add('hidden-link');
+                }
+            }
+        });
+    </script>
+    {% block javascripts %}{% endblock %}
+</body>
+</html>
