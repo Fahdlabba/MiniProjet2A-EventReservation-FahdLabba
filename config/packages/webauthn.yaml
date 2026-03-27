@@ -1,0 +1,24 @@
+webauthn:
+    credential_repository: App\Repository\WebauthnCredentialRepository
+    user_repository: App\Repository\UserRepository
+    secured_rp_ids: ['localhost']
+    allowed_origins: ['http://localhost:8080']
+    
+    creation_profiles:
+        default:
+            rp:
+                name: 'EventPoster'
+                id: '%env(APP_DOMAIN)%'
+            challenge_length: 32
+            timeout: 60000
+            authenticator_selection_criteria:
+                user_verification: preferred
+                resident_key: preferred
+            attestation_conveyance: none
+            
+    request_profiles:
+        default:
+            rp_id: '%env(APP_DOMAIN)%'
+            challenge_length: 32
+            timeout: 60000
+            user_verification: preferred
