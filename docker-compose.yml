@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: symfony_php
+    environment:
+      - APP_ENV=dev
+      - APP_DEBUG=1
+      - JWT_PASSPHRASE=${JWT_PASSPHRASE:-change_me_in_production}
+      - APP_DOMAIN=${APP_DOMAIN:-localhost}
+      - DATABASE_URL=postgresql://user:pass@db:5432/app
+    volumes:
+      - ./config/jwt:/var/www/config/jwt:ro
+      - .:/var/www
+    depends_on:
+      - db
+    networks:
+      - app_network
+
+  nginx:
+    image: nginx:alpine
+    container_name: symfony_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./public:/var/www/public:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - php
+    networks:
+      - app_network
+
+  db:
+    image: postgres:15-alpine
+    container_name: symfony_db
+    environment:
+      - POSTGRES_DB=app
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
