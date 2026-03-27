@@ -1,0 +1,131 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Authentification Passkey{% endblock %}
+
+{% block body %}
+    <div class="auth-layout">
+        <section class="auth-card auth-card-main">
+            <div class="auth-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8.5 10V7.5C8.5 5.57 10.07 4 12 4C13.93 4 15.5 5.57 15.5 7.5V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <rect x="6" y="10" width="12" height="10" rx="2.5" stroke="currentColor" stroke-width="1.8"/>
+                    <circle cx="12" cy="15" r="1.2" fill="currentColor"/>
+                </svg>
+            </div>
+            <p class="eyebrow">Accès sécurisé</p>
+            <h1 class="auth-title">Connexion rapide avec Passkey</h1>
+            <p class="auth-subtitle">Choisissez un mode ci-dessous pour vous connecter ou créer votre accès.</p>
+
+            <div id="auth-alert" class="status-note" role="status" aria-live="polite" hidden></div>
+
+            <div class="tab-switch" role="tablist" aria-label="Mode de connexion">
+                <button
+                    type="button"
+                    id="tab-login"
+                    role="tab"
+                    aria-selected="true"
+                    aria-controls="login-section"
+                    class="btn btn-secondary tab-btn active"
+                    data-tab="login"
+                    onclick="showTab('login')"
+                >
+                    Se connecter
+                </button>
+                <button
+                    type="button"
+                    id="tab-register"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="register-section"
+                    class="btn btn-secondary tab-btn"
+                    data-tab="register"
+                    onclick="showTab('register')"
+                >
+                    S'inscrire
+                </button>
+            </div>
+
+            <div id="login-section" role="tabpanel" aria-labelledby="tab-login">
+                <p class="auth-note">
+                    Identifiez-vous avec la passkey déjà associée à votre appareil.
+                </p>
+                <button id="btn-login" class="btn btn-primary btn-block">Continuer avec ma Passkey</button>
+            </div>
+
+            <div id="register-section" role="tabpanel" aria-labelledby="tab-register" hidden>
+                <p class="auth-note">Renseignez vos informations pour créer une passkey sur cet appareil.</p>
+                <div class="form-group">
+                    <label class="form-label" for="reg-email">Email</label>
+                    <input type="email" id="reg-email" class="form-control" placeholder="votre@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reg-name">Nom d'affichage</label>
+                    <input type="text" id="reg-name" class="form-control" placeholder="John Doe" required>
+                </div>
+                <p class="form-help">Ces informations servent uniquement à créer votre accès sécurisé.</p>
+                <button id="btn-register" class="btn btn-primary btn-block">Créer une Passkey</button>
+            </div>
+        </section>
+
+        <section class="section-card auth-quick-guide" aria-label="Aide rapide">
+            <h2 class="section-title">Comment ça marche</h2>
+            <ol class="auth-steps">
+                <li>Choisissez Se connecter si vous avez déjà une passkey.</li>
+                <li>Choisissez S'inscrire si c'est votre première visite.</li>
+                <li>Validez avec Face ID, empreinte ou clé de sécurité.</li>
+            </ol>
+        </section>
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+<script>
+    function showAlert(message, type = 'error') {
+        const el = document.getElementById('auth-alert');
+        el.textContent = message;
+        el.hidden = false;
+        el.className = `status-note ${type === 'error' ? 'error' : 'success'}`;
+    }
+
+    function showTab(tabId) {
+        document.getElementById('login-section').hidden = tabId !== 'login';
+        document.getElementById('register-section').hidden = tabId !== 'register';
+
+        const btns = document.querySelectorAll('.tab-btn');
+        btns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tabId);
+            btn.setAttribute('aria-selected', btn.dataset.tab === tabId ? 'true' : 'false');
+        });
+
+        document.getElementById('auth-alert').hidden = true;
+    }
+
+    document.getElementById('btn-login').addEventListener('click', async () => {
+        try {
+            await loginWithPasskey();
+            showAlert('Connexion réussie. Redirection...', 'success');
+            setTimeout(() => window.location.href = '/', 1000);
+        } catch (e) {
+            showAlert(e.message);
+        }
+    });
+
+    document.getElementById('btn-register').addEventListener('click', async () => {
+        const email = document.getElementById('reg-email').value;
+        const name = document.getElementById('reg-name').value;
+
+        if (!email || !name) {
+            showAlert('Veuillez remplir tous les champs', 'error');
+            return;
+        }
+
+        try {
+            await registerPasskey(email, name);
+            showAlert('Inscription réussie. Redirection...', 'success');
+            setTimeout(() => window.location.href = '/', 1000);
+        } catch (e) {
+            showAlert(e.message);
+        }
+    });
+</script>
+{% endblock %}

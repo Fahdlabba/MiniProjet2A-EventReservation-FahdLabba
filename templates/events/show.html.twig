@@ -1,0 +1,261 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ event.title }} - Événement{% endblock %}
+
+{% block body %}
+    {% set nowTs = 'now'|date('U') %}
+    {% set openTs = event.subscriptionOpenAt ? event.subscriptionOpenAt|date('U') : null %}
+    {% set closeTs = event.subscriptionCloseAt ? event.subscriptionCloseAt|date('U') : null %}
+    {% set bookingWindowOpen = (openTs is null or nowTs >= openTs) and (closeTs is null or nowTs <= closeTs) %}
+
+    <div class="event-show-grid">
+        <section class="event-main">
+            {% if event.image %}
+                <figure class="event-hero-media">
+                    <img src="{{ event.image }}" alt="Affiche de {{ event.title }}" class="event-hero-image">
+                </figure>
+            {% endif %}
+
+            <article class="event-poster">
+                <p class="eyebrow">Événement à venir</p>
+                <h1 class="event-poster-title">{{ event.title }}</h1>
+                <p class="hero-subtitle">{{ event.location }}</p>
+            </article>
+
+            <div class="event-summary-grid">
+                <div class="summary-item">
+                    <h4>Date et heure</h4>
+                    <p>{{ event.date|date('d/m/Y H:i') }}</p>
+                </div>
+
+                <div class="summary-item">
+                    <h4>Places restantes</h4>
+                    <p>{{ event.seats }} disponibles</p>
+                </div>
+            </div>
+
+            <div class="summary-item">
+                <h4>Période d'inscription</h4>
+                <p>Ouverture: {{ event.subscriptionOpenAt ? event.subscriptionOpenAt|date('d/m/Y H:i') : 'Immédiate' }}</p>
+                <p>Clôture: {{ event.subscriptionCloseAt ? event.subscriptionCloseAt|date('d/m/Y H:i') : 'Sans limite' }}</p>
+            </div>
+
+            <article class="description-section">
+                <h2 class="section-title">À propos de cet événement</h2>
+                <p class="hero-subtitle">{{ event.description|nl2br }}</p>
+            </article>
+        </section>
+
+        <aside class="booking-card">
+            <h3 class="section-title">Réserver votre place</h3>
+
+            {% if event.seats > 0 and bookingWindowOpen %}
+                <div id="booking-auth-required" class="status-note info">
+                    Vous devez etre connecte pour reserver cet evenement.
+                    <a href="{{ path('app_login') }}" class="landing-inline-link">Se connecter</a>
+                </div>
+
+                <div id="booking-auth-form-wrapper" hidden>
+                    <p id="booking-self-hint" class="form-help"></p>
+                    <div id="booking-feedback" class="status-note" hidden></div>
+
+                    <form id="booking-form" action="{{ path('event_book', {id: event.id}) }}" method="POST">
+                        <input type="hidden" id="booking-book-for" name="book_for" value="self">
+                        <input type="hidden" id="booking-self-name" name="name" value="">
+                        <input type="hidden" id="booking-self-email" name="email" value="">
+
+                        <div class="form-group">
+                            <label class="form-label" for="booking-for-other">
+                                <input type="checkbox" id="booking-for-other">
+                                Reserver pour une autre personne
+                            </label>
+                        </div>
+
+                        <div id="booking-other-fields" hidden>
+                            <div class="form-group">
+                                <label class="form-label" for="booking-other-name">Nom complet</label>
+                                <input type="text" id="booking-other-name" class="form-control" placeholder="John Doe">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="booking-other-email">Adresse Email</label>
+                                <input type="email" id="booking-other-email" class="form-control" placeholder="john@example.com">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="booking-phone">Numero de telephone</label>
+                            <input type="tel" id="booking-phone" name="phone" class="form-control" required placeholder="+33 6 12 34 56 78">
+                        </div>
+
+                        <button type="submit" id="booking-submit-btn" class="btn btn-primary btn-block">Confirmer la reservation</button>
+                    </form>
+
+                    <noscript>
+                        <p class="status-note info">JavaScript est requis pour envoyer la reservation avec votre connexion securisee.</p>
+                    </noscript>
+                </div>
+            {% elseif event.seats <= 0 %}
+                <div class="status-note error">Désolé, cet événement est complet.</div>
+            {% elseif openTs is not null and nowTs < openTs %}
+                <div class="status-note info">Les inscriptions ouvrent le {{ event.subscriptionOpenAt|date('d/m/Y H:i') }}.</div>
+            {% else %}
+                <div class="status-note error">Les inscriptions sont fermées pour cet événement.</div>
+            {% endif %}
+        </aside>
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        function decodeJwtPayload(token) {
+            try {
+                const payloadPart = token.split('.')[1];
+                if (!payloadPart) {
+                    return null;
+                }
+
+                const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+                const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+                return JSON.parse(atob(padded));
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function inferNameFromEmail(email) {
+            const localPart = (email || '').split('@')[0] || '';
+            if (!localPart) {
+                return 'Participant';
+            }
+
+            return localPart
+                .replace(/[._-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, (letter) => letter.toUpperCase());
+        }
+
+        function setBookingFeedback(target, type, message) {
+            target.hidden = false;
+            target.className = `status-note ${type === 'error' ? 'error' : 'success'}`;
+            target.textContent = message;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const bookingForm = document.getElementById('booking-form');
+            if (!bookingForm) {
+                return;
+            }
+
+            const authRequired = document.getElementById('booking-auth-required');
+            const formWrapper = document.getElementById('booking-auth-form-wrapper');
+            const selfHint = document.getElementById('booking-self-hint');
+            const feedback = document.getElementById('booking-feedback');
+            const submitBtn = document.getElementById('booking-submit-btn');
+            const bookForField = document.getElementById('booking-book-for');
+            const selfNameField = document.getElementById('booking-self-name');
+            const selfEmailField = document.getElementById('booking-self-email');
+            const otherToggle = document.getElementById('booking-for-other');
+            const otherFields = document.getElementById('booking-other-fields');
+            const otherNameInput = document.getElementById('booking-other-name');
+            const otherEmailInput = document.getElementById('booking-other-email');
+            const phoneInput = document.getElementById('booking-phone');
+
+            const token = localStorage.getItem('jwt_token');
+            const payload = token ? decodeJwtPayload(token) : null;
+            const email = payload?.username || payload?.email || '';
+            const name = payload?.name || payload?.displayName || inferNameFromEmail(email);
+
+            if (!token || !email) {
+                authRequired.hidden = false;
+                formWrapper.hidden = true;
+                return;
+            }
+
+            selfNameField.value = name;
+            selfEmailField.value = email;
+            selfHint.textContent = `Reservation pour votre compte: ${name} (${email}).`;
+
+            authRequired.hidden = true;
+            formWrapper.hidden = false;
+
+            const applyMode = () => {
+                const isOther = otherToggle.checked;
+                bookForField.value = isOther ? 'other' : 'self';
+                otherFields.hidden = !isOther;
+                otherNameInput.required = isOther;
+                otherEmailInput.required = isOther;
+                feedback.hidden = true;
+            };
+
+            applyMode();
+            otherToggle.addEventListener('change', applyMode);
+
+            bookingForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+
+                const phone = phoneInput.value.trim();
+                if (!phone) {
+                    setBookingFeedback(feedback, 'error', 'Le numero de telephone est requis.');
+                    return;
+                }
+
+                const params = new URLSearchParams();
+                params.set('book_for', bookForField.value);
+                params.set('phone', phone);
+
+                if (bookForField.value === 'other') {
+                    const otherName = otherNameInput.value.trim();
+                    const otherEmail = otherEmailInput.value.trim();
+
+                    if (!otherName || !otherEmail) {
+                        setBookingFeedback(feedback, 'error', 'Nom et email sont requis pour reserver une autre personne.');
+                        return;
+                    }
+
+                    params.set('name', otherName);
+                    params.set('email', otherEmail);
+                } else {
+                    params.set('name', selfNameField.value.trim() || inferNameFromEmail(selfEmailField.value));
+                    params.set('email', selfEmailField.value.trim());
+                }
+
+                const initialLabel = submitBtn.textContent;
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Reservation en cours...';
+
+                try {
+                    const response = await authFetch(bookingForm.action, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: params.toString()
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Erreur lors de la reservation.');
+                    }
+
+                    setBookingFeedback(feedback, 'success', data.message || 'Reservation confirmee avec succes.');
+                    setTimeout(() => window.location.reload(), 900);
+                } catch (error) {
+                    setBookingFeedback(feedback, 'error', error.message || 'Impossible de finaliser la reservation.');
+                    if ((error.message || '').toLowerCase().includes('connecte')) {
+                        setTimeout(() => {
+                            window.location.href = '{{ path('app_login') }}';
+                        }, 1000);
+                    }
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = initialLabel;
+                }
+            });
+        });
+    </script>
+{% endblock %}

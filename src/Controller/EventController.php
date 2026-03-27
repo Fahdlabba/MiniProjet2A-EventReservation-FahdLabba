@@ -1,0 +1,141 @@
+<?php
+namespace App\Controller;
+
+use App\Entity\Event;
+use App\Entity\Reservation;
+use App\Entity\User;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+
+class EventController extends AbstractController
+{
+    public function __construct(private EntityManagerInterface $entityManager) {}
+
+    #[Route('/', name: 'home')]
+    public function index(): Response
+    {
+        $events = $this->entityManager->getRepository(Event::class)->findAll();
+        return $this->render('events/index.html.twig', [
+            'events' => $events,
+        ]);
+    }
+
+    #[Route('/event/{id}', name: 'event_show', requirements: ['id' => '\d+'])]
+    public function show(Event $event): Response
+    {
+        return $this->render('events/show.html.twig', [
+            'event' => $event,
+        ]);
+    }
+
+    #[Route('/event/{id}/book', name: 'event_book', methods: ['POST'])]
+    public function book(Request $request, Event $event): Response
+    {
+        $currentUser = $this->getUser();
+        if (!$currentUser instanceof User) {
+            if ($this->isAjaxRequest($request)) {
+                return $this->json([
+                    'error' => 'Vous devez etre connecte pour reserver cet evenement.',
+                ], Response::HTTP_UNAUTHORIZED);
+            }
+
+            $this->addFlash('error', 'Vous devez vous connecter pour reserver cet evenement.');
+            return $this->redirectToRoute('app_login');
+        }
+
+        $now = new \DateTimeImmutable();
+        $subscriptionOpenAt = $event->getSubscriptionOpenAt();
+        $subscriptionCloseAt = $event->getSubscriptionCloseAt();
+
+        if ($subscriptionOpenAt instanceof \DateTimeInterface && $now < $subscriptionOpenAt) {
+            return $this->bookingError(
+                $request,
+                $event,
+                sprintf('Les reservations ouvrent le %s.', $subscriptionOpenAt->format('d/m/Y H:i'))
+            );
+        }
+
+        if ($subscriptionCloseAt instanceof \DateTimeInterface && $now > $subscriptionCloseAt) {
+            return $this->bookingError($request, $event, 'La periode de reservation est terminee pour cet evenement.');
+        }
+
+        if ($event->getSeats() <= 0) {
+            return $this->bookingError($request, $event, 'Désolé, cet événement est complet.');
+        }
+
+        $bookFor = $request->request->get('book_for', 'self');
+        $phone = trim((string) $request->request->get('phone', ''));
+
+        if ($bookFor === 'other') {
+            $name = trim((string) $request->request->get('name', ''));
+            $email = trim((string) $request->request->get('email', ''));
+        } else {
+            $email = trim((string) $currentUser->getEmail());
+            $name = trim((string) $request->request->get('name', ''));
+
+            if ($name === '') {
+                $name = $this->inferNameFromEmail($email);
+            }
+        }
+
+        if ($name === '' || $email === '' || $phone === '') {
+            return $this->bookingError(
+                $request,
+                $event,
+                'Erreur lors de la reservation (informations manquantes).'
+            );
+        }
+
+        $reservation = new Reservation();
+        $reservation->setEvent($event);
+        $reservation->setName($name);
+        $reservation->setEmail($email);
+        $reservation->setPhone($phone);
+        
+        $event->setSeats($event->getSeats() - 1);
+
+        $this->entityManager->persist($reservation);
+        $this->entityManager->flush();
+
+        if ($this->isAjaxRequest($request)) {
+            return $this->json([
+                'success' => true,
+                'message' => 'Votre reservation a ete confirmee avec succes !',
+            ]);
+        }
+
+        $this->addFlash('success', 'Votre réservation a été confirmée avec succès !');
+        return $this->redirectToRoute('event_show', ['id' => $event->getId()]);
+    }
+
+    private function bookingError(Request $request, Event $event, string $message): Response
+    {
+        if ($this->isAjaxRequest($request)) {
+            return $this->json(['error' => $message], Response::HTTP_BAD_REQUEST);
+        }
+
+        $this->addFlash('error', $message);
+        return $this->redirectToRoute('event_show', ['id' => $event->getId()]);
+    }
+
+    private function isAjaxRequest(Request $request): bool
+    {
+        $accept = (string) $request->headers->get('Accept', '');
+        return $request->isXmlHttpRequest() || str_contains($accept, 'application/json');
+    }
+
+    private function inferNameFromEmail(string $email): string
+    {
+        $localPart = explode('@', $email)[0] ?? '';
+        $readable = trim((string) preg_replace('/\s+/', ' ', str_replace(['.', '_', '-'], ' ', $localPart)));
+
+        if ($readable === '') {
+            return 'Participant';
+        }
+
+        return ucwords($readable);
+    }
+}
