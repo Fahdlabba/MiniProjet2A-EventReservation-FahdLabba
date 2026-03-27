@@ -1,0 +1,14 @@
+/vendor/
+/var/
+/.composer/
+/cookies.txt
+/config/jwt/*.pem
+/.env
+/.env.*
+!/.env.example
+!/.env.dist
+/config/secrets/prod/prod.decrypt.private.php
+/public/bundles/
+/.phpunit.result.cache
+/.phpunit.cache/
+/.DS_Store
