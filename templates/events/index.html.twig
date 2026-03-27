@@ -1,0 +1,72 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Tous les Événements{% endblock %}
+
+{% block body %}
+    <section class="hero landing-hero">
+        <p class="eyebrow">Sorties locales, réservation facile</p>
+        <h1 class="hero-title">Réservez votre prochaine sortie sans prise de tête.</h1>
+        <p class="hero-subtitle">
+            Tout est pensé pour aller vite: vous voyez les infos importantes, vous choisissez un événement, vous confirmez.
+        </p>
+
+        <div class="hero-stats">
+            <span class="hero-stat">{{ events|length }} événements disponibles</span>
+            <span class="hero-stat">Interface simple sur mobile et desktop</span>
+        </div>
+
+        <div class="landing-hero-actions">
+            <a href="#events-list" class="btn btn-primary">Voir les événements</a>
+        </div>
+
+        <p class="landing-trust-line">
+            Besoin d'une connexion sécurisée ?
+            <a href="{{ path('app_login') }}" class="landing-inline-link">Utiliser une Passkey</a>
+        </p>
+    </section>
+
+    {% if events is empty %}
+        <section class="section-card empty-state">
+            <h2 class="section-title">Aucun événement pour le moment</h2>
+            <p>Le catalogue sera bientôt mis à jour. Revenez dans quelques instants.</p>
+            <a href="{{ path('app_login') }}" class="btn btn-secondary events-empty-action">Préparer ma connexion</a>
+        </section>
+    {% else %}
+        <section id="events-list" class="landing-events-head">
+            <h2 class="section-title">Choisissez votre prochaine sortie</h2>
+            <span class="landing-count">{{ events|length }} événements</span>
+        </section>
+
+        <section class="events-grid" aria-label="Liste des événements">
+            {% for event in events %}
+                <article class="event-card">
+                    <div class="event-card-top">
+                        <span class="event-chip">{{ event.date|date('d M Y') }}</span>
+                        <span class="event-chip">{{ event.seats }} places</span>
+                    </div>
+
+                    {% if event.image %}
+                        <div class="event-image-wrap">
+                            <img src="{{ event.image }}" alt="Affiche de {{ event.title }}" class="event-image" loading="lazy">
+                        </div>
+                    {% endif %}
+
+                    <h2 class="event-title">{{ event.title }}</h2>
+
+                    <div class="event-meta">
+                        <p>{{ event.date|date('d/m/Y') }} à {{ event.date|date('H:i') }}</p>
+                        <p>{{ event.location }}</p>
+                    </div>
+
+                    <p class="event-description">
+                        {{ event.description|slice(0, 130) }}{% if event.description|length > 130 %}...{% endif %}
+                    </p>
+
+                    <div class="event-card-footer">
+                        <a href="{{ path('event_show', {id: event.id}) }}" class="btn btn-primary event-link">Voir les détails</a>
+                    </div>
+                </article>
+            {% endfor %}
+        </section>
+    {% endif %}
+{% endblock %}
