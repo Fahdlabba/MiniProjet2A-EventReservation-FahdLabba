@@ -1,0 +1,574 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Administration{% endblock %}
+
+{% block stylesheets %}
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;600;700&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+    <div id="admin-unauthorized" class="admin-guard" hidden>
+        <h2>Accès refusé</h2>
+        <p>Vous devez être connecté avec un compte administrateur pour accéder à cette page.</p>
+        <a href="{{ path('app_login') }}" class="btn btn-primary">Se connecter</a>
+    </div>
+
+    <div id="admin-container" class="admin-layout" hidden>
+        <section class="admin-panel admin-hero">
+            <div class="admin-hero-copy">
+                <p class="eyebrow">Back-office</p>
+                <h1 class="page-title">Pilotage des evenements</h1>
+                <p>Chaque evenement est gere comme un bloc autonome avec ses proprietes de reservation, sa capacite et ses actions.</p>
+            </div>
+
+            <div class="admin-metrics" aria-live="polite">
+                <article class="admin-metric-card">
+                    <span class="admin-metric-label">Evenements actifs</span>
+                    <strong id="metric-events" class="admin-metric-value">0</strong>
+                </article>
+                <article class="admin-metric-card">
+                    <span class="admin-metric-label">Reservations totales</span>
+                    <strong id="metric-reservations" class="admin-metric-value">0</strong>
+                </article>
+                <article class="admin-metric-card">
+                    <span class="admin-metric-label">Places restantes</span>
+                    <strong id="metric-capacity" class="admin-metric-value">0</strong>
+                </article>
+            </div>
+
+            <div class="admin-hero-actions">
+                <a href="#admin-events-section" class="btn btn-secondary">Voir les evenements</a>
+                <a href="#admin-create-section" class="btn btn-primary">Creer un evenement</a>
+            </div>
+        </section>
+
+        <div class="admin-sections-grid">
+            <section id="admin-events-section" class="admin-panel admin-events-section">
+                <div class="admin-section-head">
+                    <div>
+                        <h2 class="section-title">Evenements</h2>
+                        <p>Chaque carte affiche la capacite, le taux de reservation et les derniers participants.</p>
+                    </div>
+                </div>
+                <div id="events-grid" class="admin-event-grid" aria-live="polite">
+                    <!-- JS Injection -->
+                </div>
+            </section>
+
+            <aside class="admin-panel admin-reservations-section">
+                <div class="admin-section-head">
+                    <div>
+                        <h2 class="section-title">Flux reservations</h2>
+                        <p>Suivi en temps reel des nouvelles inscriptions.</p>
+                    </div>
+                </div>
+                <ul id="reservations-feed" class="admin-reservation-feed" aria-live="polite">
+                    <!-- JS Injection -->
+                </ul>
+            </aside>
+        </div>
+
+        <section id="admin-create-section" class="admin-panel admin-create-section">
+            <div class="admin-section-head">
+                <div>
+                    <h2 class="section-title">Creation d'evenement</h2>
+                    <p>Zone dediee a la publication d'un nouvel evenement.</p>
+                </div>
+            </div>
+
+            <form id="add-event-form" class="admin-create-form">
+                <div class="admin-form-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="ev-title">Titre</label>
+                        <input type="text" id="ev-title" class="form-control" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="ev-location">Lieu</label>
+                        <input type="text" id="ev-location" class="form-control" required>
+                    </div>
+
+                    <div class="form-group form-group-full">
+                        <label class="form-label" for="ev-image">Image (URL ou chemin)</label>
+                        <input type="text" id="ev-image" class="form-control" required placeholder="https://... ou /uploads/...">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="ev-date">Date et heure</label>
+                        <input type="datetime-local" id="ev-date" class="form-control" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="ev-seats">Nombre de places</label>
+                        <input type="number" id="ev-seats" class="form-control" required min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="ev-open">Ouverture des inscriptions</label>
+                        <input type="datetime-local" id="ev-open" class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="ev-close">Cloture des inscriptions</label>
+                        <input type="datetime-local" id="ev-close" class="form-control">
+                    </div>
+
+                    <div class="form-group form-group-full">
+                        <label class="form-label" for="ev-desc">Description</label>
+                        <textarea id="ev-desc" class="form-control" required></textarea>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Publier l'evenement</button>
+                <div id="event-alert" class="status-note info" role="status" aria-live="polite" hidden></div>
+            </form>
+        </section>
+
+        <div id="edit-modal" class="modal-shell" aria-hidden="true">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Modifier l'evenement</h3>
+                    <button type="button" id="edit-modal-close" class="btn btn-danger">Fermer</button>
+                </div>
+
+                <form id="edit-event-form" class="admin-edit-form">
+                    <input type="hidden" id="edit-event-id">
+
+                    <div class="admin-form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="edit-title">Titre</label>
+                            <input type="text" id="edit-title" class="form-control" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="edit-location">Lieu</label>
+                            <input type="text" id="edit-location" class="form-control" required>
+                        </div>
+
+                        <div class="form-group form-group-full">
+                            <label class="form-label" for="edit-image">Image (URL ou chemin)</label>
+                            <input type="text" id="edit-image" class="form-control" required placeholder="https://... ou /uploads/...">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="edit-date">Date et heure</label>
+                            <input type="datetime-local" id="edit-date" class="form-control" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="edit-seats">Nombre de places</label>
+                            <input type="number" id="edit-seats" class="form-control" required min="0">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="edit-open">Ouverture des inscriptions</label>
+                            <input type="datetime-local" id="edit-open" class="form-control">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="edit-close">Cloture des inscriptions</label>
+                            <input type="datetime-local" id="edit-close" class="form-control">
+                        </div>
+
+                        <div class="form-group form-group-full">
+                            <label class="form-label" for="edit-desc">Description</label>
+                            <textarea id="edit-desc" class="form-control" required></textarea>
+                        </div>
+                    </div>
+
+                    <div class="admin-actions">
+                        <button type="submit" class="btn btn-primary">Enregistrer</button>
+                        <button type="button" class="btn btn-secondary" id="edit-cancel">Annuler</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const token = localStorage.getItem('jwt_token');
+        if (!token) {
+            document.getElementById('admin-unauthorized').hidden = false;
+            return;
+        }
+
+        const state = {
+            events: [],
+            reservations: [],
+        };
+
+        const eventAlert = document.getElementById('event-alert');
+        const adminContainer = document.getElementById('admin-container');
+        const unauthorized = document.getElementById('admin-unauthorized');
+        const addEventForm = document.getElementById('add-event-form');
+        const eventsGrid = document.getElementById('events-grid');
+        const reservationsFeed = document.getElementById('reservations-feed');
+        const editModal = document.getElementById('edit-modal');
+        const editForm = document.getElementById('edit-event-form');
+        const metricEvents = document.getElementById('metric-events');
+        const metricReservations = document.getElementById('metric-reservations');
+        const metricCapacity = document.getElementById('metric-capacity');
+
+        const escapeHtml = (value) => {
+            if (value === null || value === undefined) {
+                return '';
+            }
+
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+
+        const formatDate = (value) => {
+            if (!value) {
+                return '—';
+            }
+
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+
+            return date.toLocaleString('fr-FR', {
+                dateStyle: 'short',
+                timeStyle: 'short',
+            });
+        };
+
+        const formatSubscriptionWindow = (event) => {
+            const openLabel = event.subscriptionOpenAt ? formatDate(event.subscriptionOpenAt) : 'Immédiate';
+            const closeLabel = event.subscriptionCloseAt ? formatDate(event.subscriptionCloseAt) : 'Sans clôture';
+            return `${openLabel} → ${closeLabel}`;
+        };
+
+        const notify = (message, type = 'success') => {
+            eventAlert.textContent = message;
+            eventAlert.hidden = false;
+            eventAlert.className = `status-note ${type}`;
+        };
+
+        const eventPayloadFromForm = (prefix) => ({
+            title: document.getElementById(`${prefix}-title`).value,
+            date: document.getElementById(`${prefix}-date`).value,
+            seats: Number(document.getElementById(`${prefix}-seats`).value),
+            location: document.getElementById(`${prefix}-location`).value,
+            image: document.getElementById(`${prefix}-image`).value.trim() || null,
+            description: document.getElementById(`${prefix}-desc`).value,
+            subscriptionOpenAt: document.getElementById(`${prefix}-open`).value || null,
+            subscriptionCloseAt: document.getElementById(`${prefix}-close`).value || null,
+        });
+
+        const closeEditModal = () => {
+            editModal.classList.remove('is-open');
+            editModal.setAttribute('aria-hidden', 'true');
+            editForm.reset();
+        };
+
+        const openEditModal = (event) => {
+            document.getElementById('edit-event-id').value = String(event.id);
+            document.getElementById('edit-title').value = event.title || '';
+            document.getElementById('edit-date').value = event.date || '';
+            document.getElementById('edit-seats').value = String(event.seats ?? 0);
+            document.getElementById('edit-location').value = event.location || '';
+            document.getElementById('edit-image').value = event.image || '';
+            document.getElementById('edit-desc').value = event.description || '';
+            document.getElementById('edit-open').value = event.subscriptionOpenAt || '';
+            document.getElementById('edit-close').value = event.subscriptionCloseAt || '';
+            editModal.classList.add('is-open');
+            editModal.setAttribute('aria-hidden', 'false');
+        };
+
+        const reservationsByEvent = (eventId) => state.reservations.filter(
+            (reservation) => Number(reservation.eventId) === Number(eventId)
+        );
+
+        const summarizeEvent = (event) => {
+            const eventReservations = reservationsByEvent(event.id);
+            const reservedSeats = eventReservations.length;
+            const totalSeats = Number(event.seats ?? 0);
+            const remainingSeats = Math.max(totalSeats - reservedSeats, 0);
+
+            return {
+                eventReservations,
+                reservedSeats,
+                remainingSeats,
+                totalSeats,
+            };
+        };
+
+        const renderMetrics = () => {
+            const totalEvents = state.events.length;
+            const totalReservations = state.reservations.length;
+            const remainingCapacity = state.events.reduce((sum, event) => {
+                const summary = summarizeEvent(event);
+                return sum + summary.remainingSeats;
+            }, 0);
+
+            metricEvents.textContent = String(totalEvents);
+            metricReservations.textContent = String(totalReservations);
+            metricCapacity.textContent = String(remainingCapacity);
+        };
+
+        const renderReservations = () => {
+            if (state.reservations.length === 0) {
+                reservationsFeed.innerHTML = `
+                    <li class="admin-feed-empty">
+                        <p>Aucune reservation pour le moment.</p>
+                    </li>
+                `;
+                return;
+            }
+
+            const recentReservations = [...state.reservations]
+                .sort((left, right) => Number(right.id) - Number(left.id))
+                .slice(0, 8);
+
+            reservationsFeed.innerHTML = recentReservations.map((reservation) => `
+                <li class="admin-feed-item">
+                    <div>
+                        <strong>${escapeHtml(reservation.name)}</strong>
+                        <p>${escapeHtml(reservation.email)}</p>
+                    </div>
+                    <span>${escapeHtml(reservation.eventName)}</span>
+                </li>
+            `).join('');
+        };
+
+        const renderEvents = () => {
+            if (state.events.length === 0) {
+                eventsGrid.innerHTML = `
+                    <div class="admin-events-empty" role="status">
+                        <h3>Aucun evenement cree</h3>
+                        <p>Utilisez la section creation pour publier votre premier evenement.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            eventsGrid.innerHTML = state.events.map((event) => {
+                const summary = summarizeEvent(event);
+                const description = event.description || '';
+                const shortDescription = description.length > 140 ? `${description.slice(0, 137)}...` : description;
+                const latestReservations = summary.eventReservations.slice(0, 3);
+                const eventTitle = event.title || 'Evenement';
+                const image = event.image ? String(event.image).trim() : '';
+
+                const mediaMarkup = image
+                    ? `<img class="admin-event-media" src="${escapeHtml(image)}" alt="Illustration de ${escapeHtml(eventTitle)}">`
+                    : '<div class="admin-event-media admin-event-media-placeholder" aria-hidden="true">Sans image</div>';
+
+                const reservationPreview = latestReservations.length === 0
+                    ? '<li>Aucune reservation</li>'
+                    : latestReservations.map((reservation) => `<li>${escapeHtml(reservation.name)} (${escapeHtml(reservation.email)})</li>`).join('');
+
+                return `
+                    <article class="admin-event-card" data-event-id="${event.id}">
+                        <header class="admin-event-top">
+                            <div>
+                                <p class="admin-event-id">Evenement #${event.id}</p>
+                                <h3>${escapeHtml(event.title)}</h3>
+                            </div>
+                            <span class="admin-event-reservation-pill">${summary.reservedSeats} reservation(s)</span>
+                        </header>
+
+                        ${mediaMarkup}
+
+                        <p class="admin-event-description">${escapeHtml(shortDescription)}</p>
+
+                        <dl class="admin-event-properties">
+                            <div>
+                                <dt>Date</dt>
+                                <dd>${escapeHtml(formatDate(event.date))}</dd>
+                            </div>
+                            <div>
+                                <dt>Lieu</dt>
+                                <dd>${escapeHtml(event.location)}</dd>
+                            </div>
+                            <div>
+                                <dt>Capacite</dt>
+                                <dd>${summary.totalSeats}</dd>
+                            </div>
+                            <div>
+                                <dt>Places restantes</dt>
+                                <dd>${summary.remainingSeats}</dd>
+                            </div>
+                            <div class="admin-event-property-wide">
+                                <dt>Fenetre de reservation</dt>
+                                <dd>${escapeHtml(formatSubscriptionWindow(event))}</dd>
+                            </div>
+                        </dl>
+
+                        <div class="admin-event-latest-reservations">
+                            <h4>Dernieres inscriptions</h4>
+                            <ul>${reservationPreview}</ul>
+                        </div>
+
+                        <div class="admin-actions">
+                            <button type="button" class="btn btn-subtle" data-action="edit" data-id="${event.id}">Modifier</button>
+                            <button type="button" class="btn btn-danger" data-action="delete" data-id="${event.id}">Supprimer</button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        };
+
+        const parseErrorMessage = async (response) => {
+            try {
+                const payload = await response.json();
+                return payload.error || `Erreur ${response.status}`;
+            } catch (_) {
+                return `Erreur ${response.status}`;
+            }
+        };
+
+        const loadAdminData = async () => {
+            const res = await authFetch('/api/admin/data');
+
+            if (!res.ok) {
+                if (res.status === 401) {
+                    const refreshed = await refreshToken();
+                    if (refreshed) {
+                        return loadAdminData();
+                    }
+                }
+
+                throw new Error(await parseErrorMessage(res));
+            }
+
+            const data = await res.json();
+            state.events = data.events || [];
+            state.reservations = data.reservations || [];
+
+            renderMetrics();
+            renderEvents();
+            renderReservations();
+        };
+
+        try {
+            await loadAdminData();
+            adminContainer.hidden = false;
+        } catch (e) {
+            unauthorized.hidden = false;
+        }
+
+        addEventForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+
+            const payload = eventPayloadFromForm('ev');
+
+            try {
+                const res = await authFetch('/api/admin/event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    notify('Événement ajouté.', 'success');
+                    e.target.reset();
+                    await loadAdminData();
+                } else {
+                    throw new Error(await parseErrorMessage(res));
+                }
+            } catch (err) {
+                notify('Erreur: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        eventsGrid.addEventListener('click', async (event) => {
+            const target = event.target.closest('button[data-action]');
+            if (!target) {
+                return;
+            }
+
+            const action = target.getAttribute('data-action');
+            const id = Number(target.getAttribute('data-id'));
+            const currentEvent = state.events.find((item) => Number(item.id) === id);
+            if (!currentEvent) {
+                return;
+            }
+
+            if (action === 'edit') {
+                openEditModal(currentEvent);
+                return;
+            }
+
+            if (action === 'delete') {
+                if (!confirm(`Supprimer l'événement « ${currentEvent.title} » ?`)) {
+                    return;
+                }
+
+                target.disabled = true;
+                try {
+                    const res = await authFetch(`/api/admin/event/${id}`, {
+                        method: 'DELETE',
+                    });
+
+                    if (!res.ok) {
+                        throw new Error(await parseErrorMessage(res));
+                    }
+
+                    notify('Événement supprimé.', 'success');
+                    await loadAdminData();
+                } catch (err) {
+                    notify('Suppression impossible: ' + err.message, 'error');
+                } finally {
+                    target.disabled = false;
+                }
+            }
+        });
+
+        editForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const submit = editForm.querySelector('button[type="submit"]');
+            const id = Number(document.getElementById('edit-event-id').value);
+            submit.disabled = true;
+
+            try {
+                const res = await authFetch(`/api/admin/event/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(eventPayloadFromForm('edit')),
+                });
+
+                if (!res.ok) {
+                    throw new Error(await parseErrorMessage(res));
+                }
+
+                closeEditModal();
+                notify('Événement mis à jour.', 'success');
+                await loadAdminData();
+            } catch (err) {
+                notify('Mise à jour impossible: ' + err.message, 'error');
+            } finally {
+                submit.disabled = false;
+            }
+        });
+
+        document.getElementById('edit-modal-close').addEventListener('click', closeEditModal);
+        document.getElementById('edit-cancel').addEventListener('click', closeEditModal);
+
+        editModal.addEventListener('click', (event) => {
+            if (event.target === editModal) {
+                closeEditModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && editModal.classList.contains('is-open')) {
+                closeEditModal();
+            }
+        });
+    });
+</script>
+{% endblock %}
