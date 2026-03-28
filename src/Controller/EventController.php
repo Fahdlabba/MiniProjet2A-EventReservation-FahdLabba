@@ -62,10 +62,6 @@ class EventController extends AbstractController
             return $this->bookingError($request, $event, 'La periode de reservation est terminee pour cet evenement.');
         }
 
-        if ($event->getSeats() <= 0) {
-            return $this->bookingError($request, $event, 'Désolé, cet événement est complet.');
-        }
-
         $bookFor = $request->request->get('book_for', 'self');
         $phone = trim((string) $request->request->get('phone', ''));
 
@@ -94,8 +90,21 @@ class EventController extends AbstractController
         $reservation->setName($name);
         $reservation->setEmail($email);
         $reservation->setPhone($phone);
-        
-        $event->setSeats($event->getSeats() - 1);
+
+        $message = 'Votre reservation a ete confirmee avec succes !';
+
+        if ($event->getSeats() > 0) {
+            $reservation->setStatus(Reservation::STATUS_CONFIRMED);
+            $event->setSeats($event->getSeats() - 1);
+        } else {
+            $reservation->setStatus(Reservation::STATUS_WAITLISTED);
+            $waitlistedBefore = $this->entityManager->getRepository(Reservation::class)->count([
+                'event' => $event,
+                'status' => Reservation::STATUS_WAITLISTED,
+            ]);
+            $waitlistPosition = $waitlistedBefore + 1;
+            $message = sprintf('Evenement complet: vous etes ajoute a la liste d\'attente (position %d).', $waitlistPosition);
+        }
 
         $this->entityManager->persist($reservation);
         $this->entityManager->flush();
@@ -103,11 +112,12 @@ class EventController extends AbstractController
         if ($this->isAjaxRequest($request)) {
             return $this->json([
                 'success' => true,
-                'message' => 'Votre reservation a ete confirmee avec succes !',
+                'status' => $reservation->getStatus(),
+                'message' => $message,
             ]);
         }
 
-        $this->addFlash('success', 'Votre réservation a été confirmée avec succès !');
+        $this->addFlash('success', $message);
         return $this->redirectToRoute('event_show', ['id' => $event->getId()]);
     }
 
