@@ -9,6 +9,11 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: '`reservation`')]
 class Reservation
 {
+    public const STATUS_CONFIRMED = 'confirmed';
+    public const STATUS_WAITLISTED = 'waitlisted';
+    public const STATUS_CANCELLED = 'cancelled';
+    public const STATUS_EXPIRED = 'expired';
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -30,9 +35,23 @@ class Reservation
     #[ORM\Column]
     private ?\DateTimeImmutable $createdAt = null;
 
+    #[ORM\Column(length: 32)]
+    private string $status = self::STATUS_CONFIRMED;
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
+        $this->status = self::STATUS_CONFIRMED;
+    }
+
+    public static function statuses(): array
+    {
+        return [
+            self::STATUS_CONFIRMED,
+            self::STATUS_WAITLISTED,
+            self::STATUS_CANCELLED,
+            self::STATUS_EXPIRED,
+        ];
     }
 
     public function getId(): ?int
@@ -92,6 +111,21 @@ class Reservation
     public function setCreatedAt(\DateTimeImmutable $createdAt): self
     {
         $this->createdAt = $createdAt;
+        return $this;
+    }
+
+    public function getStatus(): string
+    {
+        return $this->status;
+    }
+
+    public function setStatus(string $status): self
+    {
+        if (!in_array($status, self::statuses(), true)) {
+            throw new \InvalidArgumentException(sprintf('Unsupported reservation status: %s', $status));
+        }
+
+        $this->status = $status;
         return $this;
     }
 }
