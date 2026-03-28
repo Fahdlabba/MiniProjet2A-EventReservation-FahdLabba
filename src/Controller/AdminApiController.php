@@ -23,7 +23,7 @@ class AdminApiController extends AbstractController
         $reservations = $this->em->getRepository(Reservation::class)->findAll();
 
         $eventData = array_map(fn(Event $e) => $this->serializeEvent($e), $events);
-        
+
         $reservationData = array_map(fn(Reservation $r) => $this->serializeReservation($r), $reservations);
         
         return $this->json([
