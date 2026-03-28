@@ -1,0 +1,235 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mes reservations{% endblock %}
+
+{% block body %}
+    <section class="hero my-reservations-hero">
+        <p class="eyebrow">Espace personnel</p>
+        <h1 class="hero-title">Mes reservations</h1>
+        <p class="hero-subtitle">Consultez vos confirmations, votre position en liste d'attente et les reservations a valider.</p>
+    </section>
+
+    <section class="section-card my-reservations-card">
+        <div id="my-reservations-auth-required" class="status-note info" hidden>
+            Vous devez etre connecte pour voir vos reservations.
+            <a href="{{ path('app_login') }}" class="landing-inline-link">Se connecter</a>
+        </div>
+
+        <div id="my-reservations-feedback" class="status-note" hidden></div>
+
+        <div id="my-reservations-loading" class="my-reservations-loading">Chargement de vos reservations...</div>
+        <div id="my-reservations-list" class="my-reservations-list" hidden></div>
+    </section>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authRequired = document.getElementById('my-reservations-auth-required');
+            const feedback = document.getElementById('my-reservations-feedback');
+            const loading = document.getElementById('my-reservations-loading');
+            const list = document.getElementById('my-reservations-list');
+
+            const setFeedback = (type, message) => {
+                feedback.hidden = false;
+                feedback.className = `status-note ${type}`;
+                feedback.textContent = message;
+            };
+
+            const statusLabel = (status) => {
+                const labels = {
+                    confirmed: 'Confirmee',
+                    waitlisted: 'Liste d\'attente',
+                    cancelled: 'Annulee',
+                    expired: 'Expiree'
+                };
+
+                return labels[status] || status;
+            };
+
+            const statusClass = (status) => {
+                if (status === 'confirmed') {
+                    return 'status-confirmed';
+                }
+
+                if (status === 'waitlisted') {
+                    return 'status-waitlisted';
+                }
+
+                if (status === 'cancelled') {
+                    return 'status-cancelled';
+                }
+
+                return 'status-expired';
+            };
+
+            const formatDate = (value) => {
+                if (!value) {
+                    return 'Non renseigne';
+                }
+
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) {
+                    return value;
+                }
+
+                return date.toLocaleString('fr-FR', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                });
+            };
+
+            const escapeHtml = (value) => {
+                if (value === null || value === undefined) {
+                    return '';
+                }
+
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            };
+
+            const renderReservations = (reservations) => {
+                if (!reservations.length) {
+                    list.innerHTML = `
+                        <article class="my-reservation-item">
+                            <h3>Aucune reservation trouvee</h3>
+                            <p>Reservez un evenement pour voir apparaitre son suivi ici.</p>
+                        </article>
+                    `;
+                    list.hidden = false;
+                    return;
+                }
+
+                list.innerHTML = reservations.map((reservation) => {
+                    const waitlistBlock = reservation.status === 'waitlisted' && reservation.waitlistPosition
+                        ? `<p class="my-reservation-meta"><strong>Position en liste d'attente:</strong> ${reservation.waitlistPosition}</p>`
+                        : '';
+
+                    const claimBlock = reservation.canClaim
+                        ? `
+                            <div class="my-reservation-claim-box">
+                                <p>Validation requise avant le ${escapeHtml(formatDate(reservation.claimExpiresAt))}.</p>
+                                <button type="button" class="btn btn-primary" data-claim-reservation-id="${reservation.id}">Valider ma reservation</button>
+                            </div>
+                        `
+                        : '';
+
+                    const claimState = reservation.claimedAt
+                        ? `<p class="my-reservation-meta"><strong>Validee le:</strong> ${escapeHtml(formatDate(reservation.claimedAt))}</p>`
+                        : '';
+
+                    return `
+                        <article class="my-reservation-item" data-reservation-id="${reservation.id}">
+                            <header class="my-reservation-head">
+                                <div>
+                                    <h3>${escapeHtml(reservation.eventName || 'Evenement')}</h3>
+                                    <p>${escapeHtml(reservation.eventLocation || 'Lieu non renseigne')} • ${escapeHtml(formatDate(reservation.eventDate))}</p>
+                                </div>
+                                <span class="reservation-status-pill ${statusClass(reservation.status)}">${escapeHtml(statusLabel(reservation.status))}</span>
+                            </header>
+
+                            <div class="my-reservation-body">
+                                <p class="my-reservation-meta"><strong>Reservation creee le:</strong> ${escapeHtml(formatDate(reservation.createdAt))}</p>
+                                ${waitlistBlock}
+                                ${claimState}
+                                ${claimBlock}
+                            </div>
+                        </article>
+                    `;
+                }).join('');
+
+                list.hidden = false;
+            };
+
+            const loadReservations = async () => {
+                loading.hidden = false;
+                list.hidden = true;
+                feedback.hidden = true;
+
+                const response = await authFetch('/api/reservations/mine', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (!response.ok) {
+                    let message = 'Impossible de charger vos reservations.';
+                    try {
+                        const payload = await response.json();
+                        if (payload.error) {
+                            message = payload.error;
+                        }
+                    } catch (_) {
+                        // Ignore parsing error and keep generic message.
+                    }
+
+                    throw new Error(message);
+                }
+
+                const payload = await response.json();
+                renderReservations(payload.reservations || []);
+                loading.hidden = true;
+            };
+
+            const token = localStorage.getItem('jwt_token');
+            if (!token) {
+                loading.hidden = true;
+                authRequired.hidden = false;
+                return;
+            }
+
+            try {
+                await loadReservations();
+            } catch (error) {
+                loading.hidden = true;
+                setFeedback('error', error.message || 'Impossible de charger vos reservations.');
+            }
+
+            list.addEventListener('click', async (event) => {
+                const claimButton = event.target.closest('[data-claim-reservation-id]');
+                if (!claimButton) {
+                    return;
+                }
+
+                const reservationId = claimButton.getAttribute('data-claim-reservation-id');
+                if (!reservationId) {
+                    return;
+                }
+
+                claimButton.disabled = true;
+                const previousLabel = claimButton.textContent;
+                claimButton.textContent = 'Validation...';
+
+                try {
+                    const response = await authFetch(`/reservation/${reservationId}/claim`, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(payload.error || 'Impossible de valider la reservation.');
+                    }
+
+                    setFeedback('success', payload.message || 'Reservation validee.');
+                    await loadReservations();
+                } catch (error) {
+                    setFeedback('error', error.message || 'Impossible de valider la reservation.');
+                } finally {
+                    claimButton.disabled = false;
+                    claimButton.textContent = previousLabel;
+                }
+            });
+        });
+    </script>
+{% endblock %}

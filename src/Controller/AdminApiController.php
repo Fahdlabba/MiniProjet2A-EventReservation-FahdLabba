@@ -3,6 +3,7 @@ namespace App\Controller;
 
 use App\Entity\Event;
 use App\Entity\Reservation;
+use App\Repository\ReservationRepository;
 use App\Service\ReservationNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -269,9 +270,24 @@ class AdminApiController extends AbstractController
             'phone' => $reservation->getPhone(),
             'status' => $reservation->getStatus(),
             'createdAt' => $reservation->getCreatedAt()?->format('Y-m-d\\TH:i:s'),
+            'waitlistPosition' => $this->waitlistPositionFor($reservation),
             'claimExpiresAt' => $reservation->getClaimExpiresAt()?->format('Y-m-d\\TH:i:s'),
             'claimedAt' => $reservation->getClaimedAt()?->format('Y-m-d\\TH:i:s'),
         ];
+    }
+
+    private function waitlistPositionFor(Reservation $reservation): ?int
+    {
+        if ($reservation->getStatus() !== Reservation::STATUS_WAITLISTED) {
+            return null;
+        }
+
+        $repository = $this->em->getRepository(Reservation::class);
+        if (!$repository instanceof ReservationRepository) {
+            return null;
+        }
+
+        return $repository->getWaitlistPosition($reservation);
     }
 
     private function promoteNextWaitlistedReservation(Event $event): ?Reservation

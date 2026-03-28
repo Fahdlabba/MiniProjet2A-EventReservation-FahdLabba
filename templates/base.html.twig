@@ -28,6 +28,7 @@
 
             <div class="nav-links">
                 <a href="{{ path('home') }}" class="nav-link">Événements</a>
+                <a href="{{ path('my_reservations') }}" id="nav-my-reservations" class="nav-link nav-pill hidden-link">Mes reservations</a>
                 <a href="/login" id="nav-login" class="nav-link nav-pill">Connexion</a>
                 <a href="/admin" id="nav-admin" class="nav-link nav-pill hidden-link">Admin</a>
             </div>
@@ -58,8 +59,10 @@
             const token = localStorage.getItem('jwt_token');
             const navLogin = document.getElementById('nav-login');
             const navAdmin = document.getElementById('nav-admin');
+            const navMyReservations = document.getElementById('nav-my-reservations');
 
             if (token) {
+                navMyReservations.classList.remove('hidden-link');
                 navLogin.textContent = 'Déconnexion';
                 navLogin.classList.add('logout-link');
                 navLogin.onclick = (e) => {
@@ -77,6 +80,8 @@
                 } catch (e) {
                     navAdmin.classList.add('hidden-link');
                 }
+            } else {
+                navMyReservations.classList.add('hidden-link');
             }
         });
     </script>

@@ -1003,6 +1003,19 @@ textarea.form-control {
     gap: 0.65rem;
 }
 
+.admin-feed-main {
+    display: grid;
+    gap: 0.24rem;
+    width: 100%;
+}
+
+.admin-feed-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
 .admin-feed-item strong {
     display: block;
     color: #34473d;
@@ -1020,9 +1033,119 @@ textarea.form-control {
     text-align: right;
 }
 
+.admin-feed-meta {
+    font-size: 0.8rem;
+    color: #5d6f65;
+}
+
+.admin-feed-actions {
+    display: inline-flex;
+    align-items: flex-start;
+}
+
+.reservation-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    padding: 0.2rem 0.6rem;
+    white-space: nowrap;
+}
+
+.reservation-status-pill.status-confirmed {
+    color: #1c6b4f;
+    background: #e8f7ef;
+    border-color: #c9e8d8;
+}
+
+.reservation-status-pill.status-waitlisted {
+    color: #9a5a12;
+    background: #fff3e1;
+    border-color: #f5dcb8;
+}
+
+.reservation-status-pill.status-cancelled {
+    color: #8e4350;
+    background: #faedf0;
+    border-color: #f0c9d0;
+}
+
+.reservation-status-pill.status-expired {
+    color: #5e626d;
+    background: #f0f1f4;
+    border-color: #d9dde3;
+}
+
 .admin-feed-empty {
     text-align: center;
     color: #5f7267;
+}
+
+.my-reservations-hero {
+    max-width: 920px;
+}
+
+.my-reservations-card {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.my-reservations-loading {
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.my-reservations-list {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.my-reservation-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: #fffcf7;
+    padding: 0.9rem;
+    display: grid;
+    gap: 0.7rem;
+}
+
+.my-reservation-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.65rem;
+}
+
+.my-reservation-head h3 {
+    margin-bottom: 0.12rem;
+}
+
+.my-reservation-head p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.my-reservation-body {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.my-reservation-meta {
+    color: #4b5f53;
+    font-size: 0.9rem;
+}
+
+.my-reservation-claim-box {
+    border: 1px solid #f0d7b2;
+    border-radius: 12px;
+    background: #fff5e7;
+    padding: 0.68rem;
+    display: grid;
+    gap: 0.5rem;
 }
 
 .admin-create-section {
@@ -1215,6 +1338,12 @@ textarea.form-control {
 
     .admin-feed-item span {
         text-align: left;
+    }
+
+    .admin-feed-title-row,
+    .my-reservation-head {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 

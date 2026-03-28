@@ -247,6 +247,59 @@
             return `${openLabel} → ${closeLabel}`;
         };
 
+        const reservationStatusLabel = (status) => {
+            const labels = {
+                confirmed: 'Confirmee',
+                waitlisted: 'Liste d\'attente',
+                cancelled: 'Annulee',
+                expired: 'Expiree',
+            };
+
+            return labels[status] || status;
+        };
+
+        const reservationStatusClass = (status) => {
+            if (status === 'confirmed') {
+                return 'status-confirmed';
+            }
+
+            if (status === 'waitlisted') {
+                return 'status-waitlisted';
+            }
+
+            if (status === 'cancelled') {
+                return 'status-cancelled';
+            }
+
+            return 'status-expired';
+        };
+
+        const waitlistPositionForReservation = (reservation) => {
+            if (reservation.status !== 'waitlisted') {
+                return null;
+            }
+
+            if (Number.isInteger(Number(reservation.waitlistPosition)) && Number(reservation.waitlistPosition) > 0) {
+                return Number(reservation.waitlistPosition);
+            }
+
+            const queue = state.reservations
+                .filter((item) => item.status === 'waitlisted' && Number(item.eventId) === Number(reservation.eventId))
+                .sort((left, right) => {
+                    const leftTime = new Date(left.createdAt || 0).getTime();
+                    const rightTime = new Date(right.createdAt || 0).getTime();
+
+                    if (leftTime !== rightTime) {
+                        return leftTime - rightTime;
+                    }
+
+                    return Number(left.id) - Number(right.id);
+                });
+
+            const index = queue.findIndex((item) => Number(item.id) === Number(reservation.id));
+            return index >= 0 ? index + 1 : null;
+        };
+
         const notify = (message, type = 'success') => {
             eventAlert.textContent = message;
             eventAlert.hidden = false;
@@ -290,15 +343,18 @@
 
         const summarizeEvent = (event) => {
             const eventReservations = reservationsByEvent(event.id);
-            const reservedSeats = eventReservations.length;
-            const totalSeats = Number(event.seats ?? 0);
-            const remainingSeats = Math.max(totalSeats - reservedSeats, 0);
+            const confirmedReservations = eventReservations.filter((reservation) => reservation.status === 'confirmed');
+            const waitlistedReservations = eventReservations.filter((reservation) => reservation.status === 'waitlisted');
+            const reservedSeats = confirmedReservations.length;
+            const remainingSeats = Math.max(Number(event.seats ?? 0), 0);
+            const totalSeats = remainingSeats + reservedSeats;
 
             return {
                 eventReservations,
                 reservedSeats,
                 remainingSeats,
                 totalSeats,
+                waitlistedCount: waitlistedReservations.length,
             };
         };
 
@@ -329,15 +385,39 @@
                 .sort((left, right) => Number(right.id) - Number(left.id))
                 .slice(0, 8);
 
-            reservationsFeed.innerHTML = recentReservations.map((reservation) => `
-                <li class="admin-feed-item">
-                    <div>
-                        <strong>${escapeHtml(reservation.name)}</strong>
-                        <p>${escapeHtml(reservation.email)}</p>
-                    </div>
-                    <span>${escapeHtml(reservation.eventName)}</span>
-                </li>
-            `).join('');
+            reservationsFeed.innerHTML = recentReservations.map((reservation) => {
+                const waitlistPosition = waitlistPositionForReservation(reservation);
+                const waitlistInfo = waitlistPosition
+                    ? `<p class="admin-feed-meta">Position liste d'attente: #${waitlistPosition}</p>`
+                    : '';
+
+                const claimInfo = reservation.claimExpiresAt && !reservation.claimedAt
+                    ? `<p class="admin-feed-meta">Validation attendue avant ${escapeHtml(formatDate(reservation.claimExpiresAt))}</p>`
+                    : '';
+
+                const canCancel = reservation.status === 'confirmed' || reservation.status === 'waitlisted';
+                const actionsMarkup = canCancel
+                    ? `<button type="button" class="btn btn-subtle" data-action="cancel-reservation" data-id="${reservation.id}">Annuler</button>`
+                    : '';
+
+                return `
+                    <li class="admin-feed-item">
+                        <div class="admin-feed-main">
+                            <div class="admin-feed-title-row">
+                                <strong>${escapeHtml(reservation.name)}</strong>
+                                <span class="reservation-status-pill ${reservationStatusClass(reservation.status)}">${escapeHtml(reservationStatusLabel(reservation.status))}</span>
+                            </div>
+                            <p>${escapeHtml(reservation.email)}</p>
+                            <p class="admin-feed-meta">${escapeHtml(reservation.eventName)}</p>
+                            ${waitlistInfo}
+                            ${claimInfo}
+                        </div>
+                        <div class="admin-feed-actions">
+                            ${actionsMarkup}
+                        </div>
+                    </li>
+                `;
+            }).join('');
         };
 
         const renderEvents = () => {
@@ -374,7 +454,7 @@
                                 <p class="admin-event-id">Evenement #${event.id}</p>
                                 <h3>${escapeHtml(event.title)}</h3>
                             </div>
-                            <span class="admin-event-reservation-pill">${summary.reservedSeats} reservation(s)</span>
+                            <span class="admin-event-reservation-pill">${summary.reservedSeats} confirmee(s), ${summary.waitlistedCount} en attente</span>
                         </header>
 
                         ${mediaMarkup}
@@ -482,6 +562,51 @@
                 notify('Erreur: ' + err.message, 'error');
             } finally {
                 btn.disabled = false;
+            }
+        });
+
+        reservationsFeed.addEventListener('click', async (event) => {
+            const button = event.target.closest('button[data-action="cancel-reservation"]');
+            if (!button) {
+                return;
+            }
+
+            const reservationId = Number(button.getAttribute('data-id'));
+            const reservation = state.reservations.find((item) => Number(item.id) === reservationId);
+            if (!reservation) {
+                return;
+            }
+
+            if (!confirm(`Annuler la reservation de ${reservation.name} ?`)) {
+                return;
+            }
+
+            button.disabled = true;
+
+            try {
+                const res = await authFetch(`/api/admin/reservation/${reservationId}/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+
+                if (!res.ok) {
+                    throw new Error(await parseErrorMessage(res));
+                }
+
+                const payload = await res.json();
+                if (payload.promotedReservation) {
+                    notify('Reservation annulee. Une inscription en attente a ete promue.', 'success');
+                } else {
+                    notify('Reservation annulee.', 'success');
+                }
+
+                await loadAdminData();
+            } catch (err) {
+                notify('Annulation impossible: ' + err.message, 'error');
+            } finally {
+                button.disabled = false;
             }
         });
 

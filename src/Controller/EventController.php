@@ -31,6 +31,12 @@ class EventController extends AbstractController
         ]);
     }
 
+    #[Route('/my-reservations', name: 'my_reservations')]
+    public function myReservations(): Response
+    {
+        return $this->render('events/my_reservations.html.twig');
+    }
+
     #[Route('/event/{id}/book', name: 'event_book', methods: ['POST'])]
     public function book(Request $request, Event $event): Response
     {
