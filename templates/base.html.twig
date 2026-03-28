@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ asset('css/style.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/style.css') }}?v=20260328-1">
     {% block stylesheets %}{% endblock %}
 </head>
 <body>
@@ -28,6 +28,7 @@
 
             <div class="nav-links">
                 <a href="{{ path('home') }}" class="nav-link">Événements</a>
+                <a href="{{ path('my_reservations') }}" id="nav-my-reservations" class="nav-link nav-pill hidden-link">Mes reservations</a>
                 <a href="/login" id="nav-login" class="nav-link nav-pill">Connexion</a>
                 <a href="/admin" id="nav-admin" class="nav-link nav-pill hidden-link">Admin</a>
             </div>
@@ -52,14 +53,16 @@
         <p>Une expérience de réservation rapide, claire et sécurisée.</p>
     </footer>
 
-    <script src="{{ asset('js/auth.js') }}"></script>
+    <script src="{{ asset('js/auth.js') }}?v=20260328-1"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('jwt_token');
             const navLogin = document.getElementById('nav-login');
             const navAdmin = document.getElementById('nav-admin');
+            const navMyReservations = document.getElementById('nav-my-reservations');
 
             if (token) {
+                navMyReservations.classList.remove('hidden-link');
                 navLogin.textContent = 'Déconnexion';
                 navLogin.classList.add('logout-link');
                 navLogin.onclick = (e) => {
@@ -77,6 +80,8 @@
                 } catch (e) {
                     navAdmin.classList.add('hidden-link');
                 }
+            } else {
+                navMyReservations.classList.add('hidden-link');
             }
         });
     </script>
