@@ -31,6 +31,8 @@ class AdminApiController extends AbstractController
             'name' => $r->getName(),
             'email' => $r->getEmail(),
             'phone' => $r->getPhone(),
+            'status' => $r->getStatus(),
+            'createdAt' => $r->getCreatedAt()?->format('Y-m-d\\TH:i:s'),
         ], $reservations);
         
         return $this->json([
