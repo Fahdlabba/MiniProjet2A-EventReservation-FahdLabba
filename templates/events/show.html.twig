@@ -49,11 +49,17 @@
         <aside class="booking-card">
             <h3 class="section-title">Réserver votre place</h3>
 
-            {% if event.seats > 0 and bookingWindowOpen %}
+            {% if bookingWindowOpen %}
                 <div id="booking-auth-required" class="status-note info">
                     Vous devez etre connecte pour reserver cet evenement.
                     <a href="{{ path('app_login') }}" class="landing-inline-link">Se connecter</a>
                 </div>
+
+                {% if event.seats <= 0 %}
+                    <div class="status-note info">
+                        L'evenement est complet. Vous pouvez encore rejoindre la liste d'attente.
+                    </div>
+                {% endif %}
 
                 <div id="booking-auth-form-wrapper" hidden>
                     <p id="booking-self-hint" class="form-help"></p>
@@ -88,15 +94,15 @@
                             <input type="tel" id="booking-phone" name="phone" class="form-control" required placeholder="+33 6 12 34 56 78">
                         </div>
 
-                        <button type="submit" id="booking-submit-btn" class="btn btn-primary btn-block">Confirmer la reservation</button>
+                        <button type="submit" id="booking-submit-btn" class="btn btn-primary btn-block">
+                            {{ event.seats > 0 ? 'Confirmer la reservation' : "Rejoindre la liste d'attente" }}
+                        </button>
                     </form>
 
                     <noscript>
                         <p class="status-note info">JavaScript est requis pour envoyer la reservation avec votre connexion securisee.</p>
                     </noscript>
                 </div>
-            {% elseif event.seats <= 0 %}
-                <div class="status-note error">Désolé, cet événement est complet.</div>
             {% elseif openTs is not null and nowTs < openTs %}
                 <div class="status-note info">Les inscriptions ouvrent le {{ event.subscriptionOpenAt|date('d/m/Y H:i') }}.</div>
             {% else %}
