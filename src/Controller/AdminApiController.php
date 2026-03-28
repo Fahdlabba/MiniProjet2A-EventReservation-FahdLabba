@@ -3,6 +3,7 @@ namespace App\Controller;
 
 use App\Entity\Event;
 use App\Entity\Reservation;
+use App\Service\ReservationNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -14,7 +15,13 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 class AdminApiController extends AbstractController
 {
-    public function __construct(private EntityManagerInterface $em) {}
+    private const CLAIM_WINDOW_MINUTES = 30;
+
+    public function __construct(
+        private EntityManagerInterface $em,
+        private ReservationNotificationService $notificationService,
+    ) {
+    }
 
     #[Route('/data', name: 'api_admin_data', methods: ['GET'])]
     public function data(): JsonResponse
@@ -262,6 +269,8 @@ class AdminApiController extends AbstractController
             'phone' => $reservation->getPhone(),
             'status' => $reservation->getStatus(),
             'createdAt' => $reservation->getCreatedAt()?->format('Y-m-d\\TH:i:s'),
+            'claimExpiresAt' => $reservation->getClaimExpiresAt()?->format('Y-m-d\\TH:i:s'),
+            'claimedAt' => $reservation->getClaimedAt()?->format('Y-m-d\\TH:i:s'),
         ];
     }
 
@@ -283,8 +292,12 @@ class AdminApiController extends AbstractController
             return null;
         }
 
+        $claimDeadline = (new \DateTimeImmutable())->modify(sprintf('+%d minutes', self::CLAIM_WINDOW_MINUTES));
         $nextReservation->setStatus(Reservation::STATUS_CONFIRMED);
+        $nextReservation->setClaimedAt(null);
+        $nextReservation->setClaimExpiresAt($claimDeadline);
         $event->setSeats(max(($event->getSeats() ?? 0) - 1, 0));
+        $this->notificationService->notifyPromotionClaimWindow($nextReservation);
 
         return $nextReservation;
     }
