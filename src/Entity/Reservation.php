@@ -38,6 +38,12 @@ class Reservation
     #[ORM\Column(length: 32)]
     private string $status = self::STATUS_CONFIRMED;
 
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $claimExpiresAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $claimedAt = null;
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
@@ -126,6 +132,28 @@ class Reservation
         }
 
         $this->status = $status;
+        return $this;
+    }
+
+    public function getClaimExpiresAt(): ?\DateTimeImmutable
+    {
+        return $this->claimExpiresAt;
+    }
+
+    public function setClaimExpiresAt(?\DateTimeImmutable $claimExpiresAt): self
+    {
+        $this->claimExpiresAt = $claimExpiresAt;
+        return $this;
+    }
+
+    public function getClaimedAt(): ?\DateTimeImmutable
+    {
+        return $this->claimedAt;
+    }
+
+    public function setClaimedAt(?\DateTimeImmutable $claimedAt): self
+    {
+        $this->claimedAt = $claimedAt;
         return $this;
     }
 }

@@ -95,9 +95,13 @@ class EventController extends AbstractController
 
         if ($event->getSeats() > 0) {
             $reservation->setStatus(Reservation::STATUS_CONFIRMED);
+            $reservation->setClaimedAt(new \DateTimeImmutable());
+            $reservation->setClaimExpiresAt(null);
             $event->setSeats($event->getSeats() - 1);
         } else {
             $reservation->setStatus(Reservation::STATUS_WAITLISTED);
+            $reservation->setClaimedAt(null);
+            $reservation->setClaimExpiresAt(null);
             $waitlistedBefore = $this->entityManager->getRepository(Reservation::class)->count([
                 'event' => $event,
                 'status' => Reservation::STATUS_WAITLISTED,
@@ -121,6 +125,68 @@ class EventController extends AbstractController
         return $this->redirectToRoute('event_show', ['id' => $event->getId()]);
     }
 
+    #[Route('/reservation/{id}/claim', name: 'reservation_claim', requirements: ['id' => '\\d+'], methods: ['POST'])]
+    public function claimReservation(Request $request, int $id): Response
+    {
+        $currentUser = $this->getUser();
+        if (!$currentUser instanceof User) {
+            if ($this->isAjaxRequest($request)) {
+                return $this->json(['error' => 'Vous devez etre connecte pour valider votre reservation.'], Response::HTTP_UNAUTHORIZED);
+            }
+
+            $this->addFlash('error', 'Vous devez vous connecter pour valider votre reservation.');
+            return $this->redirectToRoute('app_login');
+        }
+
+        $reservation = $this->entityManager->getRepository(Reservation::class)->find($id);
+        if (!$reservation instanceof Reservation) {
+            return $this->claimError($request, null, 'Reservation introuvable.', Response::HTTP_NOT_FOUND);
+        }
+
+        if (strcasecmp(trim((string) $reservation->getEmail()), trim((string) $currentUser->getEmail())) !== 0) {
+            return $this->claimError($request, $reservation->getEvent(), 'Vous ne pouvez pas valider cette reservation.', Response::HTTP_FORBIDDEN);
+        }
+
+        if ($reservation->getStatus() !== Reservation::STATUS_CONFIRMED) {
+            return $this->claimError($request, $reservation->getEvent(), 'Cette reservation ne peut pas etre validee.', Response::HTTP_CONFLICT);
+        }
+
+        $claimDeadline = $reservation->getClaimExpiresAt();
+        if (!$claimDeadline instanceof \DateTimeImmutable) {
+            return $this->claimError($request, $reservation->getEvent(), 'Aucune validation supplementaire n\'est necessaire.', Response::HTTP_CONFLICT);
+        }
+
+        $now = new \DateTimeImmutable();
+        if ($claimDeadline < $now) {
+            $reservation->setStatus(Reservation::STATUS_EXPIRED);
+            $reservation->setClaimExpiresAt(null);
+            $reservation->setClaimedAt(null);
+            $reservation->getEvent()->setSeats(($reservation->getEvent()->getSeats() ?? 0) + 1);
+            $this->entityManager->flush();
+
+            return $this->claimError(
+                $request,
+                $reservation->getEvent(),
+                'Le delai de validation est depasse. Votre place a ete liberee.',
+                Response::HTTP_GONE
+            );
+        }
+
+        $reservation->setClaimedAt($now);
+        $reservation->setClaimExpiresAt(null);
+        $this->entityManager->flush();
+
+        if ($this->isAjaxRequest($request)) {
+            return $this->json([
+                'success' => true,
+                'message' => 'Votre reservation est maintenant confirmee.',
+            ]);
+        }
+
+        $this->addFlash('success', 'Votre reservation est maintenant confirmee.');
+        return $this->redirectToRoute('event_show', ['id' => $reservation->getEvent()->getId()]);
+    }
+
     private function bookingError(Request $request, Event $event, string $message): Response
     {
         if ($this->isAjaxRequest($request)) {
@@ -128,6 +194,20 @@ class EventController extends AbstractController
         }
 
         $this->addFlash('error', $message);
+        return $this->redirectToRoute('event_show', ['id' => $event->getId()]);
+    }
+
+    private function claimError(Request $request, ?Event $event, string $message, int $status): Response
+    {
+        if ($this->isAjaxRequest($request)) {
+            return $this->json(['error' => $message], $status);
+        }
+
+        $this->addFlash('error', $message);
+        if (!$event instanceof Event) {
+            return $this->redirectToRoute('home');
+        }
+
         return $this->redirectToRoute('event_show', ['id' => $event->getId()]);
     }
 
