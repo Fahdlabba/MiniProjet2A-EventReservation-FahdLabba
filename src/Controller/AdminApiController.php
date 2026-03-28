@@ -23,17 +23,8 @@ class AdminApiController extends AbstractController
         $reservations = $this->em->getRepository(Reservation::class)->findAll();
 
         $eventData = array_map(fn(Event $e) => $this->serializeEvent($e), $events);
-        
-        $reservationData = array_map(fn(Reservation $r) => [
-            'id' => $r->getId(),
-            'eventId' => $r->getEvent()->getId(),
-            'eventName' => $r->getEvent()->getTitle(),
-            'name' => $r->getName(),
-            'email' => $r->getEmail(),
-            'phone' => $r->getPhone(),
-            'status' => $r->getStatus(),
-            'createdAt' => $r->getCreatedAt()?->format('Y-m-d\\TH:i:s'),
-        ], $reservations);
+
+        $reservationData = array_map(fn(Reservation $r) => $this->serializeReservation($r), $reservations);
         
         return $this->json([
             'events' => $eventData,
@@ -110,6 +101,39 @@ class AdminApiController extends AbstractController
         $this->em->flush();
 
         return $this->json(['success' => true]);
+    }
+
+    #[Route('/reservation/{id}/cancel', name: 'api_admin_reservation_cancel', methods: ['POST'])]
+    public function cancelReservation(int $id): JsonResponse
+    {
+        $reservation = $this->em->getRepository(Reservation::class)->find($id);
+        if (!$reservation instanceof Reservation) {
+            return $this->json(['error' => 'Reservation not found'], 404);
+        }
+
+        $status = $reservation->getStatus();
+        if ($status === Reservation::STATUS_CANCELLED || $status === Reservation::STATUS_EXPIRED) {
+            return $this->json(['error' => 'Reservation is already inactive'], 409);
+        }
+
+        $event = $reservation->getEvent();
+        $promotedReservation = null;
+
+        if ($status === Reservation::STATUS_CONFIRMED) {
+            $reservation->setStatus(Reservation::STATUS_CANCELLED);
+            $event->setSeats(($event->getSeats() ?? 0) + 1);
+            $promotedReservation = $this->promoteNextWaitlistedReservation($event);
+        } else {
+            $reservation->setStatus(Reservation::STATUS_CANCELLED);
+        }
+
+        $this->em->flush();
+
+        return $this->json([
+            'success' => true,
+            'reservation' => $this->serializeReservation($reservation),
+            'promotedReservation' => $promotedReservation ? $this->serializeReservation($promotedReservation) : null,
+        ]);
     }
 
     private function applyEventPayload(Event $event, array $data, bool $requireAllFields): ?JsonResponse
@@ -225,6 +249,44 @@ class AdminApiController extends AbstractController
             'subscriptionOpenAt' => $event->getSubscriptionOpenAt()?->format('Y-m-d\\TH:i'),
             'subscriptionCloseAt' => $event->getSubscriptionCloseAt()?->format('Y-m-d\\TH:i'),
         ];
+    }
+
+    private function serializeReservation(Reservation $reservation): array
+    {
+        return [
+            'id' => $reservation->getId(),
+            'eventId' => $reservation->getEvent()->getId(),
+            'eventName' => $reservation->getEvent()->getTitle(),
+            'name' => $reservation->getName(),
+            'email' => $reservation->getEmail(),
+            'phone' => $reservation->getPhone(),
+            'status' => $reservation->getStatus(),
+            'createdAt' => $reservation->getCreatedAt()?->format('Y-m-d\\TH:i:s'),
+        ];
+    }
+
+    private function promoteNextWaitlistedReservation(Event $event): ?Reservation
+    {
+        if (($event->getSeats() ?? 0) <= 0) {
+            return null;
+        }
+
+        $nextReservation = $this->em->getRepository(Reservation::class)->findOneBy([
+            'event' => $event,
+            'status' => Reservation::STATUS_WAITLISTED,
+        ], [
+            'createdAt' => 'ASC',
+            'id' => 'ASC',
+        ]);
+
+        if (!$nextReservation instanceof Reservation) {
+            return null;
+        }
+
+        $nextReservation->setStatus(Reservation::STATUS_CONFIRMED);
+        $event->setSeats(max(($event->getSeats() ?? 0) - 1, 0));
+
+        return $nextReservation;
     }
 
     private function isValidImageReference(string $image): bool
