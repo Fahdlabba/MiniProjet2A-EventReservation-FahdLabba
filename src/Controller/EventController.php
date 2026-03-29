@@ -4,6 +4,7 @@ namespace App\Controller;
 use App\Entity\Event;
 use App\Entity\Reservation;
 use App\Entity\User;
+use App\Service\ReservationNotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -12,7 +13,11 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class EventController extends AbstractController
 {
-    public function __construct(private EntityManagerInterface $entityManager) {}
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+        private ReservationNotificationService $notificationService,
+    ) {
+    }
 
     #[Route('/', name: 'home')]
     public function index(): Response
@@ -118,6 +123,7 @@ class EventController extends AbstractController
 
         $this->entityManager->persist($reservation);
         $this->entityManager->flush();
+        $this->notificationService->notifyReservationCreated($reservation);
 
         if ($this->isAjaxRequest($request)) {
             return $this->json([

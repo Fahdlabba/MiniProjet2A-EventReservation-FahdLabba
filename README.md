@@ -4,6 +4,7 @@ EventReservation is a Symfony application for publishing events and handling res
 - Passkey (WebAuthn) sign-up/sign-in
 - JWT access tokens
 - Admin back-office APIs for event management
+- Reservation emails (confirmation/waitlist + promotion notifications)
 
 The app is designed to run with Docker (PHP-FPM + Nginx + PostgreSQL).
 
@@ -15,6 +16,7 @@ The app is designed to run with Docker (PHP-FPM + Nginx + PostgreSQL).
 - LexikJWTAuthenticationBundle
 - GesdinetJWTRefreshTokenBundle
 - web-auth/webauthn-lib + web-auth/webauthn-symfony-bundle
+- Symfony Mailer + Mailpit (local SMTP inbox in Docker)
 - Twig + vanilla JS frontend
 
 ## Project Structure
@@ -22,6 +24,7 @@ The app is designed to run with Docker (PHP-FPM + Nginx + PostgreSQL).
 - `src/Controller`: public pages, auth APIs, admin APIs
 - `src/Entity`: Event, Reservation, User, WebauthnCredential
 - `src/Service/PasskeyAuthService.php`: WebAuthn registration/login flow
+- `src/Service/ReservationNotificationService.php`: reservation email notifications
 - `config/packages`: security, doctrine, jwt, webauthn settings
 - `migrations`: database migrations
 - `templates`: Twig pages (events, login, admin)
@@ -67,6 +70,8 @@ Then set the same passphrase in environment (for example `.env.local`):
 ```dotenv
 JWT_PASSPHRASE=change_this_passphrase
 APP_DOMAIN=localhost
+MAILER_DSN=smtp://mailer:1025
+MAILER_FROM_ADDRESS=no-reply@eventreservation.local
 ```
 
 4. Run database migrations
@@ -80,6 +85,7 @@ docker compose exec -T php php bin/console doctrine:migrations:migrate --no-inte
 - Frontend: http://localhost:8080
 - Login (Passkey): http://localhost:8080/login
 - Admin UI: http://localhost:8080/admin
+- Mail inbox (Mailpit): http://localhost:8025
 
 ## Day-to-Day Commands
 
@@ -90,6 +96,7 @@ docker compose ps
 docker compose logs -f nginx
 docker compose logs -f php
 docker compose logs -f db
+docker compose logs -f mailer
 ```
 
 ### Symfony/Doctrine commands
@@ -100,6 +107,7 @@ docker compose exec -T php php bin/console debug:router
 docker compose exec -T php php bin/console doctrine:migrations:status
 docker compose exec -T php php bin/console doctrine:migrations:migrate --no-interaction
 docker compose exec -T php php bin/console cache:clear
+docker compose exec -T php php bin/console mailer:test user@example.com --from=no-reply@eventreservation.local --subject="SMTP check" --body="Mailer is working"
 ```
 
 ### Composer
@@ -136,7 +144,7 @@ docker compose exec -T php php bin/console app:promote-admin user@example.com
 ## Data Model
 
 - `Event`: title, description, date, location, seats, image, subscription window
-- `Reservation`: event, name, email, phone, createdAt
+- `Reservation`: event, name, email, phone, createdAt, status, claimExpiresAt, claimedAt
 - `User`: UUID id, email, roles
 - `WebauthnCredential`: serialized credential source linked to user
 - `refresh_tokens` table from Gesdinet bundle migration
@@ -145,7 +153,11 @@ docker compose exec -T php php bin/console app:promote-admin user@example.com
 
 - Event booking is blocked when:
   - user is not authenticated
-  - seats are 0
   - current time is outside subscription window
-- Successful booking decrements event seats by 1.
+  - required booking fields are missing
+- Booking behavior:
+  - if seats are available, reservation is created as `confirmed` and seats are decremented
+  - if seats are 0, reservation is created as `waitlisted`
+- A reservation email is sent after each booking (confirmed or waitlisted).
+- When an admin cancels a confirmed reservation, the next waitlisted user can be promoted with a claim deadline email.
 - Admin delete is blocked when reservations already exist for the event.
